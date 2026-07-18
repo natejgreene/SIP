@@ -36,6 +36,7 @@ def convert():
             new_prog["station_mask"].append(old_data[i][b])
                             
         new_prog["name"] = "" # Not in old format
+                            new_prog["skip_runs"] = 0
         
         #  decode program type from old format & clean up new format
         new_prog["type"] = "NA"

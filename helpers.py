@@ -441,6 +441,72 @@ def total_duration(prog): # total duration of all stations in program
 
         return s_count * prog["duration_sec"][0]
 
+
+SKIP_MATCH_CACHE = {}
+
+
+def _is_program_day_match_for_date(prog, date_obj):
+    """Return True if program date rules match a specific date."""
+    p_type = prog.get("type", "alldays")
+    if p_type == "interval":
+        interval_days = prog.get("interval_base_day", 0)
+        if interval_days < 1:
+            return False
+        dse = (date_obj - epoch.date()).days
+        return (dse % interval_days) == prog.get("day_mask", 0)
+
+    # Weekly program day matching.
+    if not (prog.get("day_mask", 0) - 128) & (1 << date_obj.weekday()):
+        return False
+
+    if p_type == "evendays":
+        return date_obj.day % 2 == 0
+
+    if p_type == "odddays":
+        if date_obj.day == 31 or (date_obj.month == 2 and date_obj.day == 29):
+            return False
+        return date_obj.day % 2 == 1
+
+    return True
+
+
+def _count_matching_days_through_date(prog, date_obj):
+    """Count how many schedule dates match from epoch through date_obj inclusive."""
+    prog_sig = (
+        prog.get("type", "alldays"),
+        prog.get("day_mask", 0),
+        prog.get("interval_base_day", 0),
+    )
+    cache_key = (prog_sig, date_obj.toordinal())
+    if cache_key in SKIP_MATCH_CACHE:
+        return SKIP_MATCH_CACHE[cache_key]
+
+    days_total = (date_obj - epoch.date()).days
+    count = 0
+    for i in range(days_total + 1):
+        d = epoch.date() + datetime.timedelta(days=i)
+        if _is_program_day_match_for_date(prog, d):
+            count += 1
+
+    SKIP_MATCH_CACHE[cache_key] = count
+    return count
+
+
+def _should_skip_program_today(prog, lt):
+    """Return True when skip-runs setting says to skip today's scheduled run."""
+    skip_runs = int(prog.get("skip_runs", 0) or 0)
+    if skip_runs <= 0:
+        return False
+
+    today = datetime.date(lt.tm_year, lt.tm_mon, lt.tm_mday)
+    if not _is_program_day_match_for_date(prog, today):
+        return False
+
+    # Run the first matching occurrence, then skip N matching occurrences.
+    match_count = _count_matching_days_through_date(prog, today)
+    run_index = match_count - 1
+    return (run_index % (skip_runs + 1)) != 0
+
 def prog_match(prog):
     """
     Test a program for current date and time match.
@@ -463,6 +529,8 @@ def prog_match(prog):
                 return 0
             elif lt.tm_mday % 2 != 1:
                 return 0
+    if _should_skip_program_today(prog, lt):
+        return 0
     this_minute = (lt.tm_hour * 60) + lt.tm_min  # Check time match in minutes
     if this_minute < prog["start_min"] or this_minute >= (prog["stop_min"] + prog["cycle_min"]):
         return 0

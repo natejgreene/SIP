@@ -38,6 +38,9 @@ $code:
             output += _(u' (Even days only)')
         if prog['type'] == 'odddays':
             output += _(u' (Odd days only)')
+        skip_runs = int(prog.get('skip_runs', 0) or 0)
+        if skip_runs > 0:
+            output += ", " + _(u'skip every') + " " + str(skip_runs) + " " + _(u'runs')
         return output
 
     def formatTime(t):

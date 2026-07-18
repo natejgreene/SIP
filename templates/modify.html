@@ -20,11 +20,14 @@ $code:
         program['duration_sec'] = [[0], [0] * gv.sd['nst']][idd]
         program['station_mask'] = [0] * gv.sd['nbrd']
         program['type'] = 'alldays'
+        program['skip_runs'] = 0
         program['name'] = ""
 
     else: #  An existing program
         program = eval(prog)            ### format conversion
         # program = json.load(prog)            ### format conversion
+        if 'skip_runs' not in program:
+            program['skip_runs'] = 0
     weekly = int(program['type'] in ['alldays', 'evendays', 'odddays'])
     stationsShown = 0
     for bid in range(gv.sd['nbrd']):        
@@ -236,8 +239,13 @@ $code:
             let idd = ${gv.sd['idd']};
             let days = 0;
             let dayInterval = 0;
+                        let skipRuns = parseInt(jQuery("#skipRuns").val());
             let i, s, sid;
           prog['enabled'] = jQuery("button#cProgramEnabled").hasClass("on") ? 1 : 0;
+                        if (isNaN(skipRuns) || skipRuns < 0) {
+                                alert($:{json.dumps(_(u'Skip runs must be 0 or greater.'), ensure_ascii=False)});
+                                return;
+                        }
           
             // process days
             if (jQuery("button#cWeeklyInterval").hasClass("on")) {
@@ -362,6 +370,7 @@ $code:
             v['cycle_min'] = interval;
             v['duration_sec'] = [[gduration], idurations][idd]; // select one or the other
             v['name'] = jQuery("#pname").val();
+            v['skip_runs'] = skipRuns;
             v['station_mask']  = stations;
 //         let vs = JSON.stringify(v);                      //// format conversion
          jQuery("form#mf input[name='v']").val(JSON.stringify(v));
@@ -422,6 +431,10 @@ let cycleTime = ${two_digits(program['cycle_min'] % 60)};
                         </select>
                     </label></p>
                 </div>
+                <p>
+                    <label class="timeInput"><b>$_(u'Skip Every X Runs'):</b>
+                    <input class="timeInput numbersOnly" type="number" size="3" maxlength="3" min="0" id="skipRuns" value="${program['skip_runs']}"> (0 = run every match)</label>
+                </p>
             </div>
             <p><button id="cWeeklyInterval" class="toggle choice ${'on' if weekly else 'off'}"><span class='toggleleft'>$_(u"Weekly")</span><span class='togglesep'>&nbsp;</span><span class='toggleright'>$_(u"Interval")</span></button></p>
             <table id="stations" class="stationList">

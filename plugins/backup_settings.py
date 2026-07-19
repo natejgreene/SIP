@@ -10,6 +10,7 @@ from webpages import ProtectedPage  # Needed for security
 from helpers import read_log
 from pathlib import Path
 import json  # for working with data file
+from urllib.parse import quote
 
 # Add new URLs to access classes in this plugin.
 # fmt: off
@@ -63,12 +64,27 @@ class backup(ProtectedPage):
     def POST(self):
         try:
             upload = web.input(myfile={})
-            data = json.loads(upload['myfile'].file.read())
+            uploaded_file = upload.get('myfile')
+            if not uploaded_file or not hasattr(uploaded_file, 'file'):
+                raise ValueError("No backup file uploaded")
+
+            uploaded_data = uploaded_file.file.read()
+            if isinstance(uploaded_data, bytes):
+                uploaded_data = uploaded_data.decode("utf-8-sig")
+
+            if not uploaded_data or not uploaded_data.strip():
+                raise ValueError("Backup file is empty")
+
+            data = json.loads(uploaded_data)
+            if not isinstance(data, dict):
+                raise ValueError("Backup file does not contain a JSON object")
+
             # break the master data into individual components corresponding to files
+            restorePoint = data.get("__restorePoint", "")
 
             for d in data:
                 if d == "__restorePoint":
-                    restorePoint = data["__restorePoint"]
+                    continue
                 elif d == "log":
                     print("Restoring log.json")
                     log = data["log"]
@@ -82,8 +98,9 @@ class backup(ProtectedPage):
                     with open(u"./data/" + d + ".json", u"w") as f:
                         json.dump(data[d], f, indent=4, sort_keys=True)
 
-            raise web.seeother('/backup?success=true&restorePoint=' + restorePoint)
-        except IOError:
+            raise web.seeother('/backup?success=true&restorePoint=' + quote(str(restorePoint), safe=''))
+        except (IOError, ValueError, AttributeError, KeyError, TypeError) as e:
+            print("Failed to restore settings: " + str(e))
             raise web.seeother('/backup?success=false')
 
 

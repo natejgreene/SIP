@@ -23,6 +23,30 @@ urls.extend([
 # Add this plugin to the PLUGINS menu ["Menu Name", "URL"], (Optional)
 gv.plugin_menu.append([_(u"Backup/Restore Settings"), u"/backup"])
 
+
+def _read_uploaded_data(uploaded_file):
+    if uploaded_file in ({}, None):
+        raise ValueError("No backup file uploaded")
+
+    if hasattr(uploaded_file, 'raw'):
+        try:
+            return uploaded_file.raw
+        except Exception as e:
+            raise ValueError("Unable to read backup file") from e
+
+    if hasattr(uploaded_file, 'value'):
+        return uploaded_file.value
+
+    if hasattr(uploaded_file, 'file'):
+        try:
+            uploaded_file.file.seek(0)
+        except (AttributeError, IOError):
+            pass
+        return uploaded_file.file.read()
+
+    return uploaded_file
+
+
 class download(ProtectedPage):
     """
     Download all data files as a single JSON archive file.
@@ -65,12 +89,11 @@ class backup(ProtectedPage):
         try:
             upload = web.input(myfile={})
             uploaded_file = upload.get('myfile')
-            if not uploaded_file or not hasattr(uploaded_file, 'file'):
-                raise ValueError("No backup file uploaded")
-
-            uploaded_data = uploaded_file.file.read()
+            uploaded_data = _read_uploaded_data(uploaded_file)
             if isinstance(uploaded_data, bytes):
                 uploaded_data = uploaded_data.decode("utf-8-sig")
+            elif not isinstance(uploaded_data, str):
+                raise ValueError("Unable to read backup file data")
 
             if not uploaded_data or not uploaded_data.strip():
                 raise ValueError("Backup file is empty")
